@@ -111,6 +111,8 @@ The app follows the browser language (English or Simplified Chinese). Add `?lang
 ## Roadmap
 
 - Start automatically at logon, with foobar2000 hidden in the notification area, so there is nothing to open before listening. See [docs/autostart-plan.md](docs/autostart-plan.md).
+- Easier setup: a `setup.ps1` that installs and checks the requirements, diagnostics in the app, and a release zip. See [docs/setup-plan.md](docs/setup-plan.md).
+- Search the whole library (songs, artists, albums across all playlists) from the home page. See [docs/search-plan.md](docs/search-plan.md).
 
 ## License
 

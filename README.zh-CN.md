@@ -111,6 +111,8 @@ ffmpeg -hide_banner -list_devices true -f dshow -i dummy
 ## 路线图
 
 - 登录后自动在后台启动，foobar2000 隐藏在托盘里，听之前不用手动打开任何东西。方案见 [docs/autostart-plan.md](docs/autostart-plan.md)
+- 简化安装：用 `setup.ps1` 自动安装并检查各项依赖，App 内显示诊断信息，提供 Release 压缩包下载。方案见 [docs/setup-plan.md](docs/setup-plan.md)
+- 在首页搜索整个音乐库（跨所有播放列表搜歌曲、歌手、专辑）。方案见 [docs/search-plan.md](docs/search-plan.md)
 
 ## 许可证
 
