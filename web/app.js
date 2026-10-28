@@ -558,6 +558,10 @@ function render() {
   $('back').hidden = !pl;
   $('view-toggle').hidden = !pl || !!state.album;
   for (const b of $('view-toggle').children) b.classList.toggle('on', b.dataset.view === state.view);
+  // The filter only searches what this page lists, so say what that is
+  const scope = !pl ? 'playlists' : !state.album && state.view === 'albums' ? 'albums' : 'tracks';
+  $('filter').placeholder = t(`filter.${scope}`);
+  $('filter').setAttribute('aria-label', t(`filter.${scope}`));
 
   if (!pl) {
     $('lib-title').textContent = t('library.playlists');
