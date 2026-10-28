@@ -697,35 +697,79 @@ function scheduleSearch() {
   }, 200);
 }
 
-function section(titleId, rows) {
-  return rows.length ? [el('li', 'section', t(titleId)), ...rows] : [];
+// The same loose comparison as server.py's loose_key: width, case and runs of spaces ignored
+function looseKey(s) {
+  return (s || '').normalize('NFKC').toLowerCase().split(/\s+/).filter(Boolean).join(' ');
 }
 
-// Artists, albums, songs, then playlists whose name matches. Until the first reply
-// arrives only the playlists show; after that the latest results stay until replaced.
+// A result group shows its first few rows; the rest wait behind "Show all N", so no single
+// group (8 Evangelion albums for "eva") pushes the others off the first screen.
+// `tail` is a note that belongs after the full list, so it waits with the folded rows.
+function section({ id, show, allId, items, tail }) {
+  if (!items.length) return [];
+  const rows = items.map((i) => i.row);
+  const out = [el('li', 'section', t(`search.${id}`)), ...rows];
+  if (tail) rows.push(tail);
+  if (items.length > show + 1) { // folding away a single row saves nothing
+    const folded = rows.slice(show);
+    for (const li of folded) li.hidden = true;
+    const li = el('li', 'note');
+    const all = el('button', 'show-all press-text', t(allId, { n: items.length }));
+    all.onclick = () => {
+      for (const r of folded) r.hidden = false;
+      li.remove();
+    };
+    li.append(all);
+    out.push(li);
+  }
+  if (tail) out.push(tail);
+  return out;
+}
+
+// Artists, songs, albums, then playlists whose name matches; a group holding an exact
+// match moves to the top. Until the first reply arrives only the playlists show; after
+// that the latest results stay until replaced.
 function searchRows() {
   const res = state.results;
-  const playlists = state.playlists.filter((p) => p.itemCount > 0 && matches(p.title)).map(playlistRow);
-  const rows = [];
+  const groups = [];
   if (res) {
-    rows.push(...section('search.artists', res.artists.map((a) => row({
-      title: a.name, sub: t('count.tracks', { n: a.songs }), onClick: () => openArtist(a.name),
-    }))));
-    rows.push(...section('search.albums', res.albums.map((r) => {
-      const a = groupAlbums(r.tracks)[0];
-      return row({
-        title: a.title, sub: [a.artist, r.playlistTitle].filter(Boolean).join(' · '),
-        trail: t('count.tracks', { n: a.tracks.length }),
-        art: `/api/artwork/${r.playlistId}/${a.firstIndex}`, onClick: () => openSearchAlbum(r.playlistId, a),
-      });
-    })));
-    const songs = section('search.songs', res.songs.map((s) => songRow(s, s.artist)));
-    if (res.songsTotal > res.songs.length) {
-      songs.push(el('li', 'note', t('search.moreSongs', { n: res.songsTotal - res.songs.length })));
-    }
-    rows.push(...songs);
+    groups.push({
+      id: 'artists', show: 3, allId: 'search.all',
+      items: res.artists.map((a) => ({
+        name: a.name,
+        row: row({ title: a.name, sub: t('count.tracks', { n: a.songs }), onClick: () => openArtist(a.name) }),
+      })),
+    });
+    groups.push({
+      id: 'songs', show: 5, allId: 'search.allSongs',
+      items: res.songs.map((s) => ({ name: s.title, row: songRow(s, s.artist) })),
+      tail: res.songsTotal > res.songs.length
+        ? el('li', 'note', t('search.moreSongs', { n: res.songsTotal - res.songs.length })) : null,
+    });
+    groups.push({
+      id: 'albums', show: 3, allId: 'search.all',
+      items: res.albums.map((r) => {
+        const a = groupAlbums(r.tracks)[0];
+        return {
+          name: a.title,
+          row: row({
+            title: a.title, sub: [a.artist, r.playlistTitle].filter(Boolean).join(' · '),
+            trail: t('count.tracks', { n: a.tracks.length }),
+            art: `/api/artwork/${r.playlistId}/${a.firstIndex}`, onClick: () => openSearchAlbum(r.playlistId, a),
+          }),
+        };
+      }),
+    });
   }
-  rows.push(...section('search.playlists', playlists));
+  groups.push({
+    id: 'playlists', show: 3, allId: 'search.all',
+    items: state.playlists.filter((p) => p.itemCount > 0 && matches(p.title))
+      .map((p) => ({ name: p.title, row: playlistRow(p) })),
+  });
+  const q = looseKey($('filter').value);
+  const exact = groups.find((g) => g.items.some((i) => looseKey(i.name) === q));
+  if (exact) groups.unshift(...groups.splice(groups.indexOf(exact), 1));
+  const rows = groups.flatMap(section);
   if (res && !rows.length) rows.push(el('li', 'note', t('search.none', { q: $('filter').value.trim() })));
   return rows;
 }

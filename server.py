@@ -207,7 +207,7 @@ def song_rows(tracks, active):
     return rows
 
 
-def search_library(tracks, query, active, limit=50):
+def search_library(tracks, query, active, limit=200):
     words = loose_key(query).split()
     if not words:
         return {"artists": [], "albums": [], "songs": [], "songsTotal": 0}
@@ -250,7 +250,8 @@ def search_library(tracks, query, active, limit=50):
         title, artist = loose_key(s["title"]), loose_key(s["artist"])
         return 0 if title.startswith(phrase) else 1 if has(title) else 2 if has(artist) else 3
     songs = sorted(song_rows(hits, active), key=lambda s: (tier(s), -s["plays"], s["title"]))
-    return {"artists": artist_rows[:8], "albums": album_rows[:8], "songs": songs[:limit],
+    # The page folds each group to a few rows, so send enough to unfold
+    return {"artists": artist_rows[:20], "albums": album_rows[:20], "songs": songs[:limit],
             "songsTotal": len(songs)}
 
 
