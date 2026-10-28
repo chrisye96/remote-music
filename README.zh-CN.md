@@ -107,3 +107,9 @@ ffmpeg -hide_banner -list_devices true -f dshow -i dummy
 ## 路线图
 
 - 滚动歌词：读取 foobar2000 的 ESLyric 保存的 `.lrc` 文件，按收听者实际听到的进度同步。方案见 [docs/lyrics-plan.md](docs/lyrics-plan.md)
+
+## 许可证
+
+MIT，见 [LICENSE](LICENSE)。
+
+foobar2000 是其所有者的商标。本项目与 foobar2000、beefweb、VB-Audio、Tailscale 均无关联，也未获得它们的认可。

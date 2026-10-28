@@ -107,3 +107,9 @@ The app follows the browser language (English or Simplified Chinese). Add `?lang
 ## Roadmap
 
 - Scrolling lyrics from foobar2000's ESLyric `.lrc` files, synced to what the listener actually hears. See [docs/lyrics-plan.md](docs/lyrics-plan.md).
+
+## License
+
+MIT; see [LICENSE](LICENSE).
+
+foobar2000 is a trademark of its respective owner. This project is not affiliated with or endorsed by foobar2000, beefweb, VB-Audio or Tailscale.
