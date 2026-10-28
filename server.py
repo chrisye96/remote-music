@@ -27,6 +27,10 @@ from pathlib import Path
 BEEFWEB = "http://127.0.0.1:8880"
 WEB_DIR = Path(__file__).parent / "web"
 HLS_DIR = Path(tempfile.gettempdir()) / "remote-music-hls"
+# Started by pythonw (the logon task) there is no console: output goes to this log, and
+# console tools started from here must not open windows of their own.
+LOG_FILE = Path(os.environ.get("LOCALAPPDATA", tempfile.gettempdir())) / "remote-music" / "server.log"
+NO_WINDOW = subprocess.CREATE_NO_WINDOW
 DEFAULT_DEVICE = "Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)"
 SEGMENT_SECONDS = 1  # ponytail: ~3s end-to-end latency; raise to 2 if Wi-Fi stalls
 # Where ESLyric saves lyrics in an installed (not portable) foobar2000 profile.
@@ -65,7 +69,8 @@ def run_encoder(args):
     while True:
         shutil.rmtree(HLS_DIR, ignore_errors=True)
         HLS_DIR.mkdir(parents=True, exist_ok=True)
-        subprocess.run(ffmpeg_cmd(args), cwd=HLS_DIR)
+        subprocess.run(ffmpeg_cmd(args), cwd=HLS_DIR, stdin=subprocess.DEVNULL, stderr=sys.stderr,
+                       creationflags=NO_WINDOW)
         print("encoder: exited, restarting in 3s", file=sys.stderr)
         time.sleep(3)
 
@@ -80,7 +85,7 @@ def foobar_dir():
     which still works when foobar2000 runs elevated (Get-Process cannot read it then)."""
     try:
         out = subprocess.run(["tasklist", "/fi", "imagename eq foobar2000.exe", "/fo", "csv", "/nh"],
-                             capture_output=True, text=True, timeout=5).stdout
+                             capture_output=True, text=True, timeout=5, creationflags=NO_WINDOW).stdout
         pid = int(next(csv.reader(io.StringIO(out)))[1])
     except (OSError, ValueError, IndexError, StopIteration, subprocess.TimeoutExpired):
         return None  # not running ("INFO: No tasks…" has no PID column)
@@ -364,7 +369,8 @@ class ExclusiveServer(ThreadingHTTPServer):
 def tailnet_url(port):
     """https URL that `tailscale serve --https=<port>` publishes, or None if Tailscale is down."""
     try:
-        out = subprocess.run(["tailscale", "status", "--json"], capture_output=True, timeout=5).stdout
+        out = subprocess.run(["tailscale", "status", "--json"], capture_output=True, timeout=5,
+                             creationflags=NO_WINDOW).stdout
         status = json.loads(out)
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return None
@@ -372,7 +378,18 @@ def tailnet_url(port):
     return f"https://{name}:{port}" if status.get("BackendState") == "Running" and name else None
 
 
+def log_to_file():
+    """pythonw has no stdout or stderr; send both to LOG_FILE, keeping one older copy."""
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if LOG_FILE.exists() and LOG_FILE.stat().st_size > 1_000_000:
+        LOG_FILE.replace(LOG_FILE.with_suffix(".old.log"))
+    sys.stdout = sys.stderr = open(LOG_FILE, "a", encoding="utf-8", buffering=1)
+    print(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')} started")
+
+
 def main():
+    if sys.stdout is None:
+        log_to_file()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--port", type=int, default=8090)
     p.add_argument("--device", default=DEFAULT_DEVICE, help="DirectShow capture device name")

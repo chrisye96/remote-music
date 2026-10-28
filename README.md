@@ -45,6 +45,16 @@ foobar2000 ──output──▶ VB-Audio Hi-Fi Cable ──dshow──▶ ffmpe
 
 ## Setup
 
+Install foobar2000 and the [VB-Audio Hi-Fi Cable](https://vb-audio.com/Cable/) first, and the beefweb component in foobar2000 (open the `.fb2k-component` file, confirm, restart foobar2000). Then, with foobar2000 open, run in this folder:
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\setup.ps1
+```
+
+The script installs Python, ffmpeg and Tailscale with winget if they are missing, and checks the cable's sample rate, ffmpeg's libsoxr, beefweb and Tailscale. It also publishes the server on your tailnet. Anything it cannot fix, it lists with what to do. It is safe to run again; finished steps are skipped. `-NoInstall` only reports. Starting at logon stays off unless you add `-Autostart` (see [Start automatically](#start-automatically)).
+
+The same steps by hand:
+
 1. **Enable the virtual cable.** Sound settings → More sound settings: enable *Hi-Fi Cable Input* on the Playback tab and *Hi-Fi Cable Output* on the Recording tab. On both, Properties → Advanced, set the format to **24 bit, 44100 Hz**.
 
    Both ends must match the cable driver's internal sample rate. If they don't, Windows reads the data at the wrong rate and the stream sounds high pitched and drops out about half the time. The capture tops out at 44.1 kHz anyway, so a higher setting gains nothing.
@@ -70,6 +80,22 @@ tailscale serve status
 ```
 
 On the iPad or phone, switch Tailscale on, open that address in Safari, and use **Add to Home Screen**. On the PC itself, use `http://localhost:8090`.
+
+### Start automatically
+
+Off by default. To have nothing to open before listening, turn it on:
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Autostart
+```
+
+This registers two tasks for your user, run at logon: **Remote Music foobar2000** starts foobar2000 hidden in the notification area (`/hide`), and **Remote Music server** runs `server.py` with `pythonw`, without a window. Its output goes to `%LOCALAPPDATA%\remote-music\server.log`. You stay logged on (a locked screen is fine) and the PC must not sleep. To turn it off again:
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Uninstall
+```
+
+Only one server runs per port: a second `server.py` on the same port stops with a message instead of taking over the stream.
 
 ### Options
 
@@ -111,8 +137,7 @@ The app follows the browser language (English or Simplified Chinese). Add `?lang
 
 ## Roadmap
 
-- Start automatically at logon, with foobar2000 hidden in the notification area, so there is nothing to open before listening. See [docs/autostart-plan.md](docs/autostart-plan.md).
-- Easier setup: a `setup.ps1` that installs and checks the requirements, diagnostics in the app, and a release zip. See [docs/setup-plan.md](docs/setup-plan.md).
+- Diagnostics in the app (is foobar2000 reachable, is the encoder running) and a release zip, so nobody needs git. See [docs/setup-plan.md](docs/setup-plan.md).
 
 ## License
 

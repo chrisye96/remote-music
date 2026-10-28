@@ -45,6 +45,16 @@ foobar2000 ──输出──▶ VB-Audio Hi-Fi Cable ──dshow──▶ ffmpe
 
 ## 一次性设置
 
+先安装 foobar2000 和 [VB-Audio Hi-Fi Cable](https://vb-audio.com/Cable/)，并在 foobar2000 里装好 beefweb 组件（打开 `.fb2k-component` 文件，确认安装，重启 foobar2000）。然后在 foobar2000 开着的情况下，在本文件夹里运行：
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\setup.ps1
+```
+
+脚本会用 winget 补装缺少的 Python、ffmpeg 和 Tailscale，检查虚拟声卡的采样率、ffmpeg 是否带 libsoxr、beefweb 和 Tailscale，并在 tailnet 上发布服务。它解决不了的问题会列出来，并说明该怎么改。可以重复运行，已经完成的步骤会跳过。`-NoInstall` 只检查不安装。开机自启默认关闭，加上 `-Autostart` 才会开启（见[开机自动启动](#开机自动启动)）。
+
+手动设置的步骤如下：
+
 1. **启用虚拟声卡。** 打开 声音设置 → 更多声音设置，在「播放」页启用 *Hi-Fi Cable Input*，在「录制」页启用 *Hi-Fi Cable Output*。两个设备都在 属性 → 高级 里设成 **24 位, 44100 Hz**。
 
    两端都必须和虚拟声卡驱动的内部采样率一致。不一致时，Windows 会按错误的采样率读取数据，流里的声音会变尖，而且大约一半时间是静音。采集本身最高只到 44.1 kHz，设得更高也没有好处。
@@ -70,6 +80,22 @@ tailscale serve status
 ```
 
 在 iPad 或手机上先打开 Tailscale，用 Safari 访问这个地址，再用「添加到主屏幕」把它当 App 使用。在电脑本机上访问 `http://localhost:8090`。
+
+### 开机自动启动
+
+默认关闭。想要听之前什么都不用打开，就手动开启：
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Autostart
+```
+
+这会为当前用户注册两个登录时运行的任务：**Remote Music foobar2000** 以隐藏方式（`/hide`）启动 foobar2000，只留在托盘里；**Remote Music server** 用 `pythonw` 无窗口运行 `server.py`，输出写到 `%LOCALAPPDATA%\remote-music\server.log`。电脑需要保持登录（锁屏没关系），并且不能睡眠。关闭这个功能：
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Uninstall
+```
+
+每个端口只能运行一份服务：在同一端口再启动一个 `server.py`，它会提示端口已被占用并退出，不会抢走正在运行的串流。
 
 ### 参数
 
@@ -111,8 +137,7 @@ ffmpeg -hide_banner -list_devices true -f dshow -i dummy
 
 ## 路线图
 
-- 登录后自动在后台启动，foobar2000 隐藏在托盘里，听之前不用手动打开任何东西。方案见 [docs/autostart-plan.md](docs/autostart-plan.md)
-- 简化安装：用 `setup.ps1` 自动安装并检查各项依赖，App 内显示诊断信息，提供 Release 压缩包下载。方案见 [docs/setup-plan.md](docs/setup-plan.md)
+- App 内诊断信息（foobar2000 是否连得上、编码器是否在运行），以及 Release 压缩包，不用 git 也能下载。方案见 [docs/setup-plan.md](docs/setup-plan.md)
 
 ## 许可证
 

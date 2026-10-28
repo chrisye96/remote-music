@@ -1,6 +1,6 @@
-# Run in the background at logon: plan (not implemented)
+# Run in the background at logon: plan and what was built
 
-Decided 2026-10-28, left for later.
+Decided 2026-10-28; implemented 2026-10-28 in `setup.ps1` (see As built at the end).
 
 ## Goal
 
@@ -29,3 +29,11 @@ Serve the music files directly instead of capturing foobar2000's output: no virt
 - **Library**: foobar2000's `.fpl` playlists are a binary format; the library would come from scanning folders and reading tags (a tag library breaks the "stdlib only" rule), plus cue sheets, artwork, and the lyrics search ESLyric does.
 
 Worth revisiting as its own feature if the delay or the 44.1 kHz ceiling starts to matter. Ready-made servers (for example Navidrome with a Subsonic client on iOS) cover the library part but not SACD ISO or the DSP chain.
+
+## As built
+
+- **Off by default** (decided 2026-10-28): `setup.ps1` installs, checks and publishes, but registers the logon tasks only with `-Autostart`; `-Uninstall` removes them. Without it, the summary says autostart is off and how to start the server by hand.
+- **Two tasks, not one task with two actions**: a task's actions run one after another, each waiting for the previous to end, and foobar2000 never ends. `Remote Music foobar2000` runs `foobar2000.exe /hide`; `Remote Music server` runs `pythonw.exe server.py`. Both at logon of the current user, not elevated, no time limit (the default stops a task after 3 days), the server restarted up to 3 times if it dies. No ordering is needed: the server already copes with foobar2000 starting later.
+- **Not elevated**: the portable foobar2000 had no "run as administrator" setting and its profile folder is writable by the user, so it does not need elevation.
+- **Windowless server**: under `pythonw` there is no stdout or stderr, so `server.py` writes to `%LOCALAPPDATA%\remote-music\server.log` (one older copy kept past 1 MB), and starts ffmpeg, `tasklist` and `tailscale` with `CREATE_NO_WINDOW` so no console windows flash up. ffmpeg's errors still reach the console or the log.
+- **One copy per port**: `server.py` claims its port with `SO_EXCLUSIVEADDRUSE` and binds before it starts the encoder, so a second copy stops with a message instead of sharing the port and wiping the stream.
