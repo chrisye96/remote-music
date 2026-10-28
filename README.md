@@ -78,7 +78,7 @@ On the iPad or phone, switch Tailscale on, open that address in Safari, and use 
 | `--device "name"` | Capture device, default `Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)` |
 | `--port 8090` | Local port |
 | `--test-tone` | Stream a 440 Hz tone instead of the capture, for troubleshooting |
-| `--lyrics-dir "path"` | ESLyric's lyrics folder. Default: `%APPDATA%\foobar2000-v2\lyrics` or `%APPDATA%\foobar2000\lyrics`. A portable foobar2000 keeps it in `profile\lyrics` next to `foobar2000.exe` |
+| `--lyrics-dir "path"` | ESLyric's lyrics folder. Usually not needed: by default the server finds the running foobar2000 and looks in `profile\lyrics` next to it (portable install), then in `%APPDATA%\foobar2000-v2\lyrics` and `%APPDATA%\foobar2000\lyrics` |
 
 List the capture devices ffmpeg can see:
 

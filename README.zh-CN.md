@@ -78,7 +78,7 @@ tailscale serve status
 | `--device "名字"` | 采集设备名，默认 `Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)` |
 | `--port 8090` | 本地端口 |
 | `--test-tone` | 用 440 Hz 测试音代替采集，排查问题时用 |
-| `--lyrics-dir "路径"` | ESLyric 的歌词文件夹。默认 `%APPDATA%\foobar2000-v2\lyrics` 或 `%APPDATA%\foobar2000\lyrics`。便携版 foobar2000 放在 `foobar2000.exe` 旁边的 `profile\lyrics` |
+| `--lyrics-dir "路径"` | ESLyric 的歌词文件夹。一般不需要：服务默认会找到正在运行的 foobar2000，先查它旁边的 `profile\lyrics`（便携版），再查 `%APPDATA%\foobar2000-v2\lyrics` 和 `%APPDATA%\foobar2000\lyrics` |
 
 查看 ffmpeg 能看到的采集设备：
 

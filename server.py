@@ -5,6 +5,9 @@ proxies the beefweb API for control, and serves the web client.
 Stdlib only; needs ffmpeg on PATH.
 """
 import argparse
+import csv
+import ctypes
+import io
 import os
 import json
 import shutil
@@ -27,7 +30,8 @@ DEFAULT_DEVICE = "Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)"
 SEGMENT_SECONDS = 1  # ponytail: ~3s end-to-end latency; raise to 2 if Wi-Fi stalls
 # Where ESLyric saves lyrics in an installed (not portable) foobar2000 profile.
 APPDATA = Path(os.environ.get("APPDATA", ""))
-LYRICS_DIRS = [APPDATA / "foobar2000-v2" / "lyrics", APPDATA / "foobar2000" / "lyrics"]
+PROFILE_LYRICS_DIRS = [APPDATA / "foobar2000-v2" / "lyrics", APPDATA / "foobar2000" / "lyrics"]
+LYRICS_DIR = None  # --lyrics-dir: use only this folder
 
 CODECS = {
     # FLAC in fMP4: lossless, plays natively in Safari HLS and via hls.js elsewhere.
@@ -70,11 +74,43 @@ def lyrics_key(name):
     return " ".join(unicodedata.normalize("NFKC", name).casefold().split())
 
 
+def foobar_dir():
+    """Folder of the running foobar2000.exe, or None. Asks only for limited query rights,
+    which still works when foobar2000 runs elevated (Get-Process cannot read it then)."""
+    try:
+        out = subprocess.run(["tasklist", "/fi", "imagename eq foobar2000.exe", "/fo", "csv", "/nh"],
+                             capture_output=True, text=True, timeout=5).stdout
+        pid = int(next(csv.reader(io.StringIO(out)))[1])
+    except (OSError, ValueError, IndexError, StopIteration, subprocess.TimeoutExpired):
+        return None  # not running ("INFO: No tasks…" has no PID column)
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return None
+    try:
+        buf, size = ctypes.create_unicode_buffer(1024), ctypes.c_ulong(1024)
+        ok = kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size))
+        return Path(buf.value).parent if ok else None
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def lyrics_dirs():
+    """--lyrics-dir if given; else a portable foobar2000's `profile\\lyrics` next to its exe,
+    then the installed profile in %APPDATA%. Looked up each time, so the server can start
+    before foobar2000."""
+    if LYRICS_DIR:
+        return [LYRICS_DIR]
+    exe_dir = foobar_dir()
+    portable = [exe_dir / "profile" / "lyrics"] if exe_dir else []
+    return portable + PROFILE_LYRICS_DIRS
+
+
 def find_lyrics(artist, title):
     """ESLyric names its files `Artist - Title.lrc` (timed) or `.txt` (plain); prefer timed."""
     wanted = lyrics_key(f"{artist} - {title}")
     found = {}
-    for folder in LYRICS_DIRS:
+    for folder in lyrics_dirs():
         if folder.is_dir():
             for f in folder.iterdir():
                 if f.suffix.lower() in (".lrc", ".txt") and lyrics_key(f.stem) == wanted:
@@ -171,10 +207,11 @@ def main():
     p.add_argument("--device", default=DEFAULT_DEVICE, help="DirectShow capture device name")
     p.add_argument("--codec", choices=CODECS, default="flac")
     p.add_argument("--test-tone", action="store_true", help="stream a 440 Hz tone instead of the device")
-    p.add_argument("--lyrics-dir", type=Path, help="ESLyric's lyrics folder (default: the foobar2000 profile in %%APPDATA%%)")
+    p.add_argument("--lyrics-dir", type=Path,
+                   help="ESLyric's lyrics folder (default: found from the running foobar2000)")
     args = p.parse_args()
-    if args.lyrics_dir:
-        LYRICS_DIRS[:] = [args.lyrics_dir]
+    global LYRICS_DIR
+    LYRICS_DIR = args.lyrics_dir
 
     threading.Thread(target=run_encoder, args=(args,), daemon=True).start()
     print(f"remote-music running (codec={args.codec}). Open on your iPad / phone:")
