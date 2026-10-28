@@ -108,6 +108,10 @@ The app follows the browser language (English or Simplified Chinese). Add `?lang
 - No login. Access is limited by your tailnet; do not expose it with `tailscale funnel` or port forwarding.
 - Windows only (DirectShow capture, VB-Audio cable).
 
+## Roadmap
+
+- Start automatically at logon, with foobar2000 hidden in the notification area, so there is nothing to open before listening. See [docs/autostart-plan.md](docs/autostart-plan.md).
+
 ## License
 
 MIT; see [LICENSE](LICENSE).

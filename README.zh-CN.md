@@ -108,6 +108,10 @@ ffmpeg -hide_banner -list_devices true -f dshow -i dummy
 - 没有登录验证，访问范围只靠你的 tailnet 限制。不要用 `tailscale funnel` 或端口映射把它暴露到公网
 - 只支持 Windows（DirectShow 采集、VB-Audio 虚拟声卡）
 
+## 路线图
+
+- 登录后自动在后台启动，foobar2000 隐藏在托盘里，听之前不用手动打开任何东西。方案见 [docs/autostart-plan.md](docs/autostart-plan.md)
+
 ## 许可证
 
 MIT，见 [LICENSE](LICENSE)。
