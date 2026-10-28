@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "remote-music",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["server.py"],
+      "port": 8090
+    },
+    {
+      "name": "remote-music-test-tone",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["server.py", "--test-tone"],
+      "port": 8090
+    }
+  ]
+}

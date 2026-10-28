@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f5f7">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121214">
+  <title>Remote Music</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="press.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.light.min.js" defer></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js" defer></script>
+  <script src="i18n.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main class="layout">
+    <section id="now" class="now" data-i18n-label="now.region" aria-label="正在播放">
+      <button class="icon press-text close-now" data-action="close-now" data-i18n-label="now.close" aria-label="收起"><i data-lucide="chevron-down"></i></button>
+      <div class="art-frame">
+        <i class="art-empty" data-lucide="disc-3" aria-hidden="true"></i>
+        <img id="art" class="art" alt="">
+      </div>
+      <div class="meta">
+        <h2 id="title" class="title" data-i18n="player.idle">未在播放</h2>
+        <div class="meta-row">
+          <div id="subtitle" class="subtitle"></div>
+          <span id="format" class="badge" style="visibility: hidden"></span>
+        </div>
+      </div>
+      <div class="progress">
+        <input id="seek" type="range" min="0" max="1" step="0.1" value="0" data-i18n-label="player.seek" aria-label="播放进度">
+        <div class="times"><span id="pos">0:00</span><span id="dur">0:00</span></div>
+      </div>
+      <div class="controls">
+        <button class="icon press-text" data-action="previous" data-i18n-label="player.previous" aria-label="上一首"><i data-lucide="skip-back"></i></button>
+        <button class="icon big press pp" data-action="toggle-play" data-i18n-label="player.toggle" aria-label="播放或暂停">
+          <i class="ic-play" data-lucide="play"></i><i class="ic-pause" data-lucide="pause"></i>
+        </button>
+        <button class="icon press-text" data-action="next" data-i18n-label="player.next" aria-label="下一首"><i data-lucide="skip-forward"></i></button>
+      </div>
+      <details id="output-row" class="output">
+        <summary class="press-flat">
+          <i class="ic-pc" data-lucide="speaker" aria-hidden="true"></i>
+          <i class="ic-here" data-lucide="audio-lines" aria-hidden="true"></i>
+          <span id="sound-label" data-i18n="sound.idle">按播放在这台设备上收听</span>
+          <i class="chev" data-lucide="chevron-down" aria-hidden="true"></i>
+        </summary>
+        <select id="output" data-i18n-label="sound.picker" aria-label="foobar 输出设备" hidden></select>
+      </details>
+      <audio id="audio" playsinline></audio>
+    </section>
+
+    <section class="library" data-i18n-label="library.region" aria-label="音乐库">
+      <header class="lib-head">
+        <button id="back" class="icon press-text" data-action="back" data-i18n-label="library.back" aria-label="返回" hidden><i data-lucide="chevron-left"></i></button>
+        <h1 id="lib-title" data-i18n="library.playlists">播放列表</h1>
+        <div id="view-toggle" class="seg" role="group" data-i18n-label="library.view" aria-label="显示方式" hidden>
+          <button class="press-flat on" data-view="tracks" data-i18n="library.tracks">曲目</button><button class="press-flat" data-view="albums" data-i18n="library.albums">专辑</button>
+        </div>
+      </header>
+      <input id="filter" type="search" placeholder="筛选" autocomplete="off" enterkeyhint="search" aria-label="筛选" data-i18n-placeholder="library.filter" data-i18n-label="library.filter">
+      <ul id="list" class="list"></ul>
+      <div id="sentinel"></div>
+    </section>
+  </main>
+
+  <div id="mini" class="mini">
+    <button class="mini-open" data-action="open-now" data-i18n-label="mini.open" aria-label="打开正在播放">
+      <img id="mini-art" alt=""><span id="mini-title" data-i18n="player.idle">未在播放</span>
+    </button>
+    <button class="icon press-text pp" data-action="toggle-play" data-i18n-label="player.toggle" aria-label="播放或暂停">
+      <i class="ic-play" data-lucide="play"></i><i class="ic-pause" data-lucide="pause"></i>
+    </button>
+  </div>
+  <div id="status" class="status" role="status" hidden></div>
+</body>
+</html>

@@ -1,0 +1,4 @@
+__pycache__/
+vendor/
+# Machine-specific notes (tailnet address, local paths)
+LOCAL.md
