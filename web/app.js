@@ -23,6 +23,10 @@ const state = {
   listening: false,
   seeking: false,
   outputs: null,
+  polledAt: 0,    // performance.now() of the last player poll, to move the position between polls
+  lyrics: null,   // { synced, lines: [{ time, text }] } or { synced: false, text } for the current track
+  lyricsOn: false, // remembered per device, read at start-up
+  lyricsHeldUntil: 0, // the listener scrolled the lyrics by hand: leave them alone until then
 };
 let hls = null;
 
@@ -152,8 +156,11 @@ function renderPlayer(p) {
     $('format').style.visibility = tr ? 'visible' : 'hidden';
     updateMediaSession(tr, artUrl);
     markPlaying();
+    loadLyrics(tr);
   }
 
+  state.polledAt = performance.now();
+  renderModes();
   $('seek').max = item.duration || 1;
   if (!state.seeking) $('seek').value = item.position;
   $('pos').textContent = fmtTime(item.position);
@@ -168,7 +175,7 @@ function skip(dir) {
   listenHere();
   const p = state.player;
   const item = p?.activeItem;
-  const order = p?.options?.find((o) => o.id === 'playbackOrder')?.value;
+  const order = playbackOrder();
   const pl = state.playlists.find((x) => x.id === item?.playlistId);
   if (order === 0 && pl && item.index >= 0) {
     if (dir > 0 && item.index === pl.itemCount - 1) return command(`/player/play/${pl.id}/0`);
@@ -183,6 +190,129 @@ function togglePlay() {
   // Flip the icon on the tap itself; the refresh after the command corrects it if needed.
   for (const b of document.querySelectorAll('.pp')) b.classList.toggle('playing', s !== 'playing');
   return command(s === 'stopped' || !s ? '/player/play' : '/player/pause/toggle');
+}
+
+// ---------- Shuffle and repeat ----------
+
+// foobar has one playback order where Spotify has two switches, so they share it:
+// 0 default, 1 repeat playlist, 2 repeat track, 3 random, 4-6 shuffle (tracks, albums, folders).
+// Shuffle and repeat therefore exclude each other; turning one on turns the other off.
+const ORDER = { off: 0, all: 1, one: 2, shuffle: 4 };
+
+function playbackOrder() {
+  return state.player?.options?.find((o) => o.id === 'playbackOrder')?.value ?? 0;
+}
+
+function setOrder(value) {
+  return post('/player', { options: [{ id: 'playbackOrder', value }] }).then(refresh);
+}
+
+function toggleShuffle() {
+  return setOrder(playbackOrder() >= 3 ? ORDER.off : ORDER.shuffle);
+}
+
+// off → all → one → off, like the repeat button in Spotify
+function cycleRepeat() {
+  const next = { [ORDER.all]: ORDER.one, [ORDER.one]: ORDER.off }[playbackOrder()] ?? ORDER.all;
+  return setOrder(next);
+}
+
+function renderModes() {
+  const order = playbackOrder();
+  const repeat = order === ORDER.all ? 'all' : order === ORDER.one ? 'one' : 'off';
+  $('shuffle').classList.toggle('on', order >= 3);
+  $('shuffle').setAttribute('aria-pressed', order >= 3);
+  $('repeat').classList.toggle('on', repeat !== 'off');
+  $('repeat').classList.toggle('one', repeat === 'one');
+  $('repeat').setAttribute('aria-label', t(`repeat.${repeat}`));
+}
+
+// ---------- Lyrics ----------
+
+// ESLyric's .lrc: "[mm:ss.xx]text", sometimes several stamps on one line. Header tags
+// ([ti:], [ar:], even "[00:00.00][by:…]") carry no words and drop out.
+function parseLrc(text) {
+  const lines = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const stamps = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
+    const words = raw.replace(/^(\[[^\]]*\])+/, '').replace(/<\d+:\d+(?:\.\d+)?>/g, '').trim();
+    if (!stamps.length || !words) continue;
+    for (const m of stamps) lines.push({ time: Number(m[1]) * 60 + Number(m[2]), text: words });
+  }
+  return lines.sort((a, b) => a.time - b.time);
+}
+
+async function loadLyrics(tr) {
+  const key = state.trackKey;
+  state.lyrics = null;
+  renderLyrics();
+  if (!tr?.title) return;
+  try {
+    const r = await fetch(`/lyrics?${new URLSearchParams({ artist: tr.artist, title: tr.title })}`);
+    if (!r.ok || key !== state.trackKey) return; // 404: no lyrics; or the track moved on
+    const { synced, text } = await r.json();
+    const lines = synced ? parseLrc(text) : [];
+    // .txt files open with "Artist: …" and "Title: …", which the panel already shows
+    const plain = text.replace(/^(?:(?:artist|title|album):.*\r?\n)+\s*/i, '');
+    state.lyrics = lines.length ? { synced: true, lines } : { synced: false, text: plain };
+  } catch {
+    return; // lyrics are a nicety; the player works without them
+  }
+  renderLyrics();
+}
+
+function renderLyrics() {
+  const box = $('lyrics');
+  const lyr = state.lyrics;
+  const shown = !!lyr && state.lyricsOn;
+  $('lyrics-toggle').disabled = !lyr;
+  $('lyrics-toggle').setAttribute('aria-pressed', shown);
+  $('lyrics-toggle').classList.toggle('on', shown);
+  box.hidden = !shown;
+  box.parentElement.classList.toggle('with-lyrics', shown);
+  box.classList.toggle('plain', !!lyr && !lyr.synced);
+  if (!lyr) return box.replaceChildren();
+  // A line with the same timestamp as the one before is its translation
+  const lineEl = (l, i, all) => el('p', i > 0 && l.time === all[i - 1].time ? 'tr' : '', l.text);
+  box.replaceChildren(...(lyr.synced ? lyr.lines.map(lineEl) : [el('p', '', lyr.text)]));
+  box.scrollTop = 0;
+  syncLyrics();
+}
+
+// What the listener hears now: foobar's position, moved on since the last poll, minus the
+// stream delay when the sound is on this device (nothing on the computer itself).
+function heardPosition() {
+  const p = state.player;
+  if (!p) return 0;
+  const playing = p.playbackState === 'playing';
+  const since = playing ? (performance.now() - state.polledAt) / 1000 : 0;
+  return p.activeItem.position + since - (playing ? streamDelay() : 0);
+}
+
+// Bilingual files put the translation on its own line with the same timestamp, so the
+// current line is every line sharing the latest timestamp that has been reached.
+function syncLyrics() {
+  const box = $('lyrics');
+  if (box.hidden || !state.lyrics?.synced) return;
+  const { lines } = state.lyrics;
+  const now = heardPosition();
+  const time = lines.findLast((l) => l.time <= now)?.time;
+  const current = [...box.children].filter((p, i) => lines[i].time === time);
+  if (!current.length || current[0].classList.contains('current')) return;
+  for (const p of box.querySelectorAll('.current')) p.classList.remove('current');
+  for (const p of current) p.classList.add('current');
+  if (performance.now() < state.lyricsHeldUntil) return;
+  const first = current[0];
+  const last = current.at(-1);
+  const middle = (first.offsetTop + last.offsetTop + last.offsetHeight) / 2;
+  const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  box.scrollTo({ top: middle - box.clientHeight / 2, behavior: smooth ? 'smooth' : 'auto' });
+}
+
+function toggleLyrics() {
+  state.lyricsOn = !state.lyricsOn;
+  try { localStorage.setItem('lyrics', state.lyricsOn ? '1' : '0'); } catch { /* private mode */ }
+  renderLyrics();
 }
 
 // ---------- Media Session (lock screen controls) ----------
@@ -535,6 +665,9 @@ const actions = {
   'toggle-play': togglePlay,
   previous: () => skip(-1),
   next: () => skip(1),
+  shuffle: toggleShuffle,
+  repeat: cycleRepeat,
+  lyrics: toggleLyrics,
   back,
   'open-now': () => document.body.classList.add('now-open'),
   'close-now': () => document.body.classList.remove('now-open'),
@@ -567,6 +700,11 @@ seek.addEventListener('change', async () => {
 });
 
 for (const img of [$('art'), $('mini-art')]) img.onerror = () => img.classList.add('noart');
+// Scrolling the lyrics by hand pauses the auto-centring for a few seconds
+for (const type of ['wheel', 'touchmove']) {
+  $('lyrics').addEventListener(type, () => { state.lyricsHeldUntil = performance.now() + 4000; }, { passive: true });
+}
+setInterval(syncLyrics, 250); // lines change between the 1 s polls
 audio.addEventListener('play', jumpToLive);
 audio.addEventListener('error', () => appleNative && retryStream()); // hls.js reports its own errors
 
@@ -574,6 +712,7 @@ new IntersectionObserver((entries) => {
   if (entries.some((e) => e.isIntersecting)) loadMore();
 }).observe($('sentinel'));
 
+try { state.lyricsOn = localStorage.getItem('lyrics') === '1'; } catch { /* private mode */ }
 window.lucide?.createIcons();
 setupMediaSession();
 loadPlaylists();

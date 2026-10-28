@@ -12,8 +12,10 @@
 
 ## 功能
 
-- **在哪里按播放，声音就到哪里。** 在 iPad 上按播放、点歌或切歌，声音会自动转到这台 iPad。控制区下方的小胶囊显示声音现在在哪里，点开可以把声音切回电脑音箱
+- **在哪里按播放，声音就到哪里。** 在 iPad 上按播放、点歌或切歌，声音会自动转到这台 iPad。左下角的小胶囊显示声音现在在哪里，点开可以把声音切回电脑音箱
 - **无损串流**：16 bit / 48 kHz FLAC（备选 AAC 320k），比电脑晚约 3 秒
+- **滚动歌词**：读取 foobar2000 的 ESLyric 保存的 `.lrc` 文件，按你实际听到的进度同步（扣掉串流延迟），中英对照的歌词成对显示。没有时间轴的 `.txt` 歌词按纯文本显示
+- **随机播放和循环**（不循环、列表循环、单曲循环），对应 foobar2000 的播放顺序
 - **锁屏控制**：显示真实的进度和时长，可以播放、暂停、切歌、拖动进度
 - **播放列表和专辑**：筛选；大列表分页加载；专辑视图按文件夹分组（合辑和没有标签的整轨也能正确归类）；显示封面
 - **主屏幕 App**（PWA），支持 iPad 和 iPhone、浅色和深色模式、英文和简体中文
@@ -76,6 +78,7 @@ tailscale serve status
 | `--device "名字"` | 采集设备名，默认 `Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)` |
 | `--port 8090` | 本地端口 |
 | `--test-tone` | 用 440 Hz 测试音代替采集，排查问题时用 |
+| `--lyrics-dir "路径"` | ESLyric 的歌词文件夹。默认 `%APPDATA%\foobar2000-v2\lyrics` 或 `%APPDATA%\foobar2000\lyrics`。便携版 foobar2000 放在 `foobar2000.exe` 旁边的 `profile\lyrics` |
 
 查看 ffmpeg 能看到的采集设备：
 
@@ -101,12 +104,9 @@ ffmpeg -hide_banner -list_devices true -f dshow -i dummy
 
 - 有约 3 秒延迟：切歌之后要过几秒才能听到变化。锁屏上的进度已经按这个延迟校正过
 - 采集精度是 16 bit / 44.1 kHz（DirectShow 的上限），再用 soxr 转成 iOS 和蓝牙使用的 48 kHz。无论歌曲本身是什么采样率，Windows 都会先把它转成虚拟声卡的格式
+- 随机播放和循环不能同时打开：foobar2000 只有一个播放顺序，打开其中一个会关掉另一个
 - 没有登录验证，访问范围只靠你的 tailnet 限制。不要用 `tailscale funnel` 或端口映射把它暴露到公网
 - 只支持 Windows（DirectShow 采集、VB-Audio 虚拟声卡）
-
-## 路线图
-
-- 滚动歌词：读取 foobar2000 的 ESLyric 保存的 `.lrc` 文件，按收听者实际听到的进度同步。方案见 [docs/lyrics-plan.md](docs/lyrics-plan.md)
 
 ## 许可证
 

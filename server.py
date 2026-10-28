@@ -13,7 +13,9 @@ import sys
 import tempfile
 import threading
 import time
+import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -23,6 +25,9 @@ WEB_DIR = Path(__file__).parent / "web"
 HLS_DIR = Path(tempfile.gettempdir()) / "remote-music-hls"
 DEFAULT_DEVICE = "Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)"
 SEGMENT_SECONDS = 1  # ponytail: ~3s end-to-end latency; raise to 2 if Wi-Fi stalls
+# Where ESLyric saves lyrics in an installed (not portable) foobar2000 profile.
+APPDATA = Path(os.environ.get("APPDATA", ""))
+LYRICS_DIRS = [APPDATA / "foobar2000-v2" / "lyrics", APPDATA / "foobar2000" / "lyrics"]
 
 CODECS = {
     # FLAC in fMP4: lossless, plays natively in Safari HLS and via hls.js elsewhere.
@@ -60,6 +65,24 @@ def run_encoder(args):
         time.sleep(3)
 
 
+def lyrics_key(name):
+    """Compare names loosely: case, width (fullwidth brackets) and runs of spaces vary."""
+    return " ".join(unicodedata.normalize("NFKC", name).casefold().split())
+
+
+def find_lyrics(artist, title):
+    """ESLyric names its files `Artist - Title.lrc` (timed) or `.txt` (plain); prefer timed."""
+    wanted = lyrics_key(f"{artist} - {title}")
+    found = {}
+    for folder in LYRICS_DIRS:
+        if folder.is_dir():
+            for f in folder.iterdir():
+                if f.suffix.lower() in (".lrc", ".txt") and lyrics_key(f.stem) == wanted:
+                    found.setdefault(f.suffix.lower(), f)
+    f = found.get(".lrc") or found.get(".txt")
+    return f and {"synced": f.suffix.lower() == ".lrc", "text": f.read_text("utf-8-sig", errors="replace")}
+
+
 class Handler(SimpleHTTPRequestHandler):
     extensions_map = {
         **SimpleHTTPRequestHandler.extensions_map,
@@ -86,7 +109,21 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith("/api/"):
             return self.proxy()
+        if self.path.startswith("/lyrics?"):
+            return self.lyrics()
         super().do_GET()
+
+    def lyrics(self):
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        found = find_lyrics(q.get("artist", [""])[0], q.get("title", [""])[0])
+        if not found:
+            return self.send_error(404, "no lyrics for this track")
+        data = json.dumps(found, ensure_ascii=False).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def do_POST(self):
         if self.path.startswith("/api/"):
@@ -134,7 +171,10 @@ def main():
     p.add_argument("--device", default=DEFAULT_DEVICE, help="DirectShow capture device name")
     p.add_argument("--codec", choices=CODECS, default="flac")
     p.add_argument("--test-tone", action="store_true", help="stream a 440 Hz tone instead of the device")
+    p.add_argument("--lyrics-dir", type=Path, help="ESLyric's lyrics folder (default: the foobar2000 profile in %%APPDATA%%)")
     args = p.parse_args()
+    if args.lyrics_dir:
+        LYRICS_DIRS[:] = [args.lyrics_dir]
 
     threading.Thread(target=run_encoder, args=(args,), daemon=True).start()
     print(f"remote-music running (codec={args.codec}). Open on your iPad / phone:")

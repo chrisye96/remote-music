@@ -12,8 +12,10 @@ foobar2000 keeps doing the decoding, so anything it can play still works: SACD I
 
 ## Features
 
-- **Play here, hear it here.** Press play, pick a song or skip on the iPad, and the sound moves to the iPad by itself. A small status pill shows where the sound is; open it to send the sound back to the PC speakers.
+- **Play here, hear it here.** Press play, pick a song or skip on the iPad, and the sound moves to the iPad by itself. A small pill at the bottom left shows where the sound is; open it to send the sound back to the PC speakers.
 - **Lossless stream**, 16 bit / 48 kHz FLAC (AAC 320k as a fallback), about 3 seconds behind the PC.
+- **Scrolling lyrics** from foobar2000's ESLyric `.lrc` files, synced to what you actually hear (the stream delay is taken off), with bilingual files shown as line pairs. Untimed `.txt` lyrics are shown as plain text.
+- **Shuffle and repeat** (off, all, one), mapped onto foobar2000's playback order.
 - **Lock screen controls** with the real track position and length, play / pause, skip and scrubbing.
 - **Playlists and albums**: filter, page through large playlists, an album view grouped by folder (works for compilations and untagged rips), artwork.
 - **Home screen app** (PWA) for iPad and iPhone, light and dark mode, English and Simplified Chinese.
@@ -76,6 +78,7 @@ On the iPad or phone, switch Tailscale on, open that address in Safari, and use 
 | `--device "name"` | Capture device, default `Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)` |
 | `--port 8090` | Local port |
 | `--test-tone` | Stream a 440 Hz tone instead of the capture, for troubleshooting |
+| `--lyrics-dir "path"` | ESLyric's lyrics folder. Default: `%APPDATA%\foobar2000-v2\lyrics` or `%APPDATA%\foobar2000\lyrics`. A portable foobar2000 keeps it in `profile\lyrics` next to `foobar2000.exe` |
 
 List the capture devices ffmpeg can see:
 
@@ -101,12 +104,9 @@ The app follows the browser language (English or Simplified Chinese). Add `?lang
 
 - About 3 seconds of delay: after skipping, the change is heard a few seconds later. The lock screen position is corrected for it.
 - The capture is 16 bit / 44.1 kHz (DirectShow's limit), resampled with soxr to the 48 kHz that iOS and Bluetooth use. Every track, whatever its sample rate, is converted to the cable's format by Windows first.
+- Shuffle and repeat cannot both be on: foobar2000 has a single playback order, so turning one on turns the other off.
 - No login. Access is limited by your tailnet; do not expose it with `tailscale funnel` or port forwarding.
 - Windows only (DirectShow capture, VB-Audio cable).
-
-## Roadmap
-
-- Scrolling lyrics from foobar2000's ESLyric `.lrc` files, synced to what the listener actually hears. See [docs/lyrics-plan.md](docs/lyrics-plan.md).
 
 ## License
 

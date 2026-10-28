@@ -142,8 +142,9 @@ svg { width: 24px; height: 24px; }
   border-radius: 14px;
   overflow: hidden;
   background: var(--line);
-  /* Shadow on all four sides, so the card's top edge reads as closed too */
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 6px rgb(0 0 0 / 0.08), 0 14px 36px -14px rgb(0 0 0 / 0.35);
+  /* Shadow on all four sides, so the card's top edge reads as closed too. The drop part
+     stays short (about 12px below the edge) so it never reaches the title. */
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 6px rgb(0 0 0 / 0.08), 0 8px 20px -8px rgb(0 0 0 / 0.3);
 }
 /* Hairline over the image: scans with white margins still get a visible edge */
 .art-frame::after {
@@ -158,20 +159,58 @@ svg { width: 24px; height: 24px; }
 .art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .art.noart, .art:not([src]) { visibility: hidden; }
 
+/* Lyrics take the artwork's square, so turning them on or off moves nothing else. The
+   artwork goes, so the faded edges blend into the plain card rather than the cover. */
+.art-frame.with-lyrics { background: var(--panel); }
+.with-lyrics .art, .with-lyrics .art-empty { visibility: hidden; }
+.lyrics {
+  position: absolute;
+  inset: 0;
+  z-index: 1; /* above the hairline in ::after */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding: 45% 20px; /* lets the first and last line reach the centre */
+  color: var(--muted);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  /* Lines fade out at the edges instead of being cut */
+  -webkit-mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(transparent, #000 18%, #000 82%, transparent);
+}
+.lyrics::-webkit-scrollbar { display: none; }
+.lyrics p { margin: 0 0 14px; transition: color 300ms ease, opacity 300ms ease; opacity: 0.55; }
+.lyrics p.current { color: var(--text); opacity: 1; }
+.lyrics p.tr { margin-top: -10px; font-size: 15px; font-weight: 500; }
+/* Plain .txt lyrics have no timing: show them all at full strength, from the top */
+.lyrics.plain {
+  padding-block: 20px;
+  white-space: pre-line;
+  -webkit-mask-image: linear-gradient(#000 82%, transparent);
+  mask-image: linear-gradient(#000 82%, transparent);
+}
+.lyrics.plain p { opacity: 1; }
+
 /* Extra room under the artwork: at the plain gap the title read as a caption stuck to it */
-.meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin-top: 8px; }
+.meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin-top: 16px; }
 /* One line each, with a reserved height, so a long title or an empty state never
    pushes the controls around */
 .title, .subtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .title {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 22px;
   font-weight: 650;
   line-height: 1.25;
   letter-spacing: -0.01em;
 }
-.meta-row { display: flex; align-items: center; gap: 8px; min-height: 24px; }
-.subtitle { flex: 1; min-width: 0; min-height: 1.45em; color: var(--muted); }
+/* The badge sits at the end of the title line, so it lines up with the title even when
+   a track has no artist */
+.meta-row { display: flex; align-items: center; gap: 10px; }
+.subtitle { min-height: 1.45em; color: var(--muted); }
 .badge {
   flex-shrink: 0;
   padding: 2px 8px;
@@ -191,17 +230,39 @@ svg { width: 24px; height: 24px; }
 .progress input:disabled { opacity: 0.4; }
 .times { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
-.controls { display: flex; justify-content: center; align-items: center; gap: 40px; }
+/* Spotify's row: shuffle and repeat at the ends, the transport in the middle */
+.controls { display: flex; justify-content: space-between; align-items: center; max-width: 360px; width: 100%; align-self: center; }
 .icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; }
 /* The main control wears the accent, like the play button in most music apps */
 .icon.big { width: 68px; height: 68px; background: var(--accent); color: var(--accent-text); }
 .icon.big svg { width: 30px; height: 30px; }
-/* Play and pause are solid, like iOS transport controls. Lucide draws pause as two hollow
-   4-unit bars; at 30px the 2-unit stroke leaves only a hairline gap inside, which reads
-   as a heavy outline (worst as a dark glyph on the light dark-mode button). */
-.controls svg, .pp svg { fill: currentColor; stroke-width: 1.5; } /* skip buttons too, so the row matches */
+/* At 24px the skip glyphs looked small next to the play button */
+.icon.skip { width: 56px; height: 56px; }
+.icon.skip svg { width: 32px; height: 32px; }
+/* Play, pause and skip are solid, like iOS transport controls. Lucide draws pause as two
+   hollow 4-unit bars; at 30px the 2-unit stroke leaves only a hairline gap inside, which
+   reads as a heavy outline (worst as a dark glyph on the light dark-mode button). */
+.skip svg, .pp svg { fill: currentColor; stroke-width: 1.5; }
 .pp .ic-pause, .pp.playing .ic-play { display: none; }
 .pp.playing .ic-pause { display: block; }
+/* Shuffle and repeat: muted when off, accent with a dot underneath when on (the dot
+   keeps "on" readable without relying on colour) */
+.icon.mode { position: relative; color: var(--muted); }
+.icon.mode svg { width: 22px; height: 22px; }
+.icon.mode.on { color: var(--accent); }
+.icon.mode:disabled { opacity: 0.35; cursor: default; }
+.icon.mode.on::after {
+  content: "";
+  position: absolute;
+  bottom: 6px;
+  left: calc(50% - 2px);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.ic-repeat-one, .mode.one .ic-repeat { display: none; }
+.mode.one .ic-repeat-one { display: block; }
 
 /* Icon buttons: press-text's 1px travel is invisible on a 24px glyph, so they also
    get the round tint iOS gives toolbar buttons, at the same 70ms press timing. */
@@ -211,40 +272,46 @@ svg { width: 24px; height: 24px; }
    show, so it also shrinks a little while held. */
 .icon.big.press:active:not(:disabled) { transform: translateY(1px) scale(0.92); }
 
-/* Where the sound is: a status line, not a control. Playing from this device moves the
-   sound here by itself; opening the line is the advanced path back to the computer. */
-/* Extra space above: right under the play button it read as part of the transport row */
-.output { display: flex; flex-direction: column; align-items: center; margin-top: 10px; color: var(--muted); font-size: 14px; }
-/* A soft pill, like the AirPlay route button: the fill says "this is tappable",
-   the chevron says it opens and closes. */
-.output summary {
+/* Bottom row, as in Spotify: where the sound is on the left, lyrics on the right.
+   Extra space above: right under the play button it read as part of the transport row. */
+.bottom-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 6px; }
+/* A soft pill, like the AirPlay route button: the fill says "this is tappable" */
+.pill {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   max-width: 100%;
-  padding: 8px 12px 8px 14px;
+  padding: 6px 10px 6px 11px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--muted);
+  font-size: 13px;
   cursor: pointer;
   list-style: none;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
-  transition: background-color 160ms ease;
+  transition: background-color 160ms ease, opacity 160ms ease;
 }
-.output summary:active { background: color-mix(in srgb, var(--text) 12%, transparent); transition-duration: 70ms; }
+.pill:active:not(:disabled) { background: color-mix(in srgb, var(--text) 12%, transparent); transition-duration: 70ms; }
 @media (hover: hover) and (pointer: fine) {
-  .output summary:hover { background: color-mix(in srgb, var(--text) 9%, transparent); }
+  .pill:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 9%, transparent); }
 }
+.pill svg { flex-shrink: 0; width: 16px; height: 16px; }
+#lyrics-toggle { flex-shrink: 0; width: 40px; height: 40px; }
+
+/* Where the sound is: a status line, not a control. Playing from this device moves the
+   sound here by itself; opening the line is the advanced path back to the computer. */
+.output { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; color: var(--muted); }
 .output summary::-webkit-details-marker { display: none; }
-.output summary svg { flex-shrink: 0; width: 18px; height: 18px; }
 #sound-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* One state icon on the left (speaker or waveform), the open/close hint on the right */
-.output .chev { width: 16px; height: 16px; transition: transform 200ms ease; }
+/* One state icon on the left (computer or waveform), the open/close hint on the right */
+.output .chev { width: 14px; height: 14px; transition: transform 200ms ease; }
 .output[open] .chev { transform: rotate(180deg); }
 .output .ic-here, .output.here .ic-pc { display: none; }
 .output.here .ic-here { display: block; color: var(--accent-2); }
 .output.here #sound-label { color: var(--text); }
+.output[open] { flex: 1; }
 .output select {
   width: 100%;
   margin-top: 6px;

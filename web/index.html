@@ -26,34 +26,42 @@
       <div class="art-frame">
         <i class="art-empty" data-lucide="disc-3" aria-hidden="true"></i>
         <img id="art" class="art" alt="">
+        <div id="lyrics" class="lyrics" hidden></div>
       </div>
       <div class="meta">
-        <h2 id="title" class="title" data-i18n="player.idle">未在播放</h2>
         <div class="meta-row">
-          <div id="subtitle" class="subtitle"></div>
+          <h2 id="title" class="title" data-i18n="player.idle">未在播放</h2>
           <span id="format" class="badge" style="visibility: hidden"></span>
         </div>
+        <div id="subtitle" class="subtitle"></div>
       </div>
       <div class="progress">
         <input id="seek" type="range" min="0" max="1" step="0.1" value="0" data-i18n-label="player.seek" aria-label="播放进度">
         <div class="times"><span id="pos">0:00</span><span id="dur">0:00</span></div>
       </div>
       <div class="controls">
-        <button class="icon press-text" data-action="previous" data-i18n-label="player.previous" aria-label="上一首"><i data-lucide="skip-back"></i></button>
+        <button id="shuffle" class="icon mode press-text" data-action="shuffle" data-i18n-label="player.shuffle" aria-label="随机播放" aria-pressed="false"><i data-lucide="shuffle"></i></button>
+        <button class="icon skip press-text" data-action="previous" data-i18n-label="player.previous" aria-label="上一首"><i data-lucide="skip-back"></i></button>
         <button class="icon big press pp" data-action="toggle-play" data-i18n-label="player.toggle" aria-label="播放或暂停">
           <i class="ic-play" data-lucide="play"></i><i class="ic-pause" data-lucide="pause"></i>
         </button>
-        <button class="icon press-text" data-action="next" data-i18n-label="player.next" aria-label="下一首"><i data-lucide="skip-forward"></i></button>
+        <button class="icon skip press-text" data-action="next" data-i18n-label="player.next" aria-label="下一首"><i data-lucide="skip-forward"></i></button>
+        <button id="repeat" class="icon mode press-text" data-action="repeat" data-i18n-label="repeat.off" aria-label="不循环">
+          <i class="ic-repeat" data-lucide="repeat"></i><i class="ic-repeat-one" data-lucide="repeat-1"></i>
+        </button>
       </div>
-      <details id="output-row" class="output">
-        <summary class="press-flat">
-          <i class="ic-pc" data-lucide="speaker" aria-hidden="true"></i>
-          <i class="ic-here" data-lucide="audio-lines" aria-hidden="true"></i>
-          <span id="sound-label" data-i18n="sound.idle">按播放在这台设备上收听</span>
-          <i class="chev" data-lucide="chevron-down" aria-hidden="true"></i>
-        </summary>
-        <select id="output" data-i18n-label="sound.picker" aria-label="foobar 输出设备" hidden></select>
-      </details>
+      <div class="bottom-row">
+        <details id="output-row" class="output">
+          <summary class="pill press-flat">
+            <i class="ic-pc" data-lucide="monitor-speaker" aria-hidden="true"></i>
+            <i class="ic-here" data-lucide="audio-lines" aria-hidden="true"></i>
+            <span id="sound-label" data-i18n="sound.idle">按播放在这里收听</span>
+            <i class="chev" data-lucide="chevron-down" aria-hidden="true"></i>
+          </summary>
+          <select id="output" data-i18n-label="sound.picker" aria-label="foobar 输出设备" hidden></select>
+        </details>
+        <button id="lyrics-toggle" class="icon mode press-text" data-action="lyrics" data-i18n-label="lyrics.button" aria-label="歌词" aria-pressed="false" disabled><i data-lucide="mic-vocal"></i></button>
+      </div>
       <audio id="audio" playsinline></audio>
     </section>
 
