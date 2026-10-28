@@ -17,6 +17,7 @@ foobar2000 keeps doing the decoding, so anything it can play still works: SACD I
 - **Scrolling lyrics** from foobar2000's ESLyric `.lrc` files, synced to what you actually hear (the stream delay is taken off), with bilingual files shown as line pairs. Untimed `.txt` lyrics are shown as plain text.
 - **Shuffle and repeat** (off, all, one), mapped onto foobar2000's playback order.
 - **Lock screen controls** with the real track position and length, play / pause, skip and scrubbing.
+- **Search the whole library** from the home page: artists, albums and songs across all playlists. A song in several playlists shows once and plays from the copy you played last; the other playlists fold out under it.
 - **Playlists and albums**: filter, page through large playlists, an album view grouped by folder (works for compilations and untagged rips), artwork.
 - **Home screen app** (PWA) for iPad and iPhone, light and dark mode, English and Simplified Chinese.
 
@@ -112,7 +113,6 @@ The app follows the browser language (English or Simplified Chinese). Add `?lang
 
 - Start automatically at logon, with foobar2000 hidden in the notification area, so there is nothing to open before listening. See [docs/autostart-plan.md](docs/autostart-plan.md).
 - Easier setup: a `setup.ps1` that installs and checks the requirements, diagnostics in the app, and a release zip. See [docs/setup-plan.md](docs/setup-plan.md).
-- Search the whole library (songs, artists, albums across all playlists) from the home page. See [docs/search-plan.md](docs/search-plan.md).
 
 ## License
 

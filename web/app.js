@@ -27,6 +27,10 @@ const state = {
   lyrics: null,   // { synced, lines: [{ time, text }] } or { synced: false, text } for the current track
   lyricsOn: false, // remembered per device, read at start-up
   lyricsHeldUntil: 0, // the listener scrolled the lyrics by hand: leave them alone until then
+  results: null,    // last library search reply { q, artists, albums, songs, songsTotal }
+  artist: null,     // open artist from the results { name, songs }
+  homeQuery: '',    // the home page's search, restored by Back
+  fromSearch: false, // the open album came from the results, so Back skips its playlist
 };
 let hls = null;
 
@@ -536,6 +540,12 @@ function matches(...fields) {
   return !q || fields.some((f) => f?.toLowerCase().includes(q));
 }
 
+// Every tap that plays a song goes through here: { playlistId, index }
+function playFrom(place) {
+  listenHere();
+  command(`/player/play/${place.playlistId}/${place.index}`);
+}
+
 // In a single-album list the artist on every row is noise; show it only for guests,
 // and show "artist · album" when the list mixes albums.
 function trackRow(t, mixed) {
@@ -543,31 +553,39 @@ function trackRow(t, mixed) {
   const number = /^\d+$/.test(t.number) ? String(Number(t.number)) : String(t.index + 1);
   const li = row({
     title: t.title, sub, lead: number, trail: t.length,
-    onClick: () => {
-      listenHere();
-      command(`/player/play/${state.playlist.id}/${t.index}`);
-    },
+    onClick: () => playFrom({ playlistId: state.playlist.id, index: t.index }),
   });
   li.dataset.index = t.index;
   return li;
 }
 
+function playlistRow(p) {
+  return row({ title: p.title, trail: t('count.tracks', { n: p.itemCount }), onClick: () => openPlaylist(p) });
+}
+
 function render() {
   const list = $('list');
   const pl = state.playlist;
-  $('back').hidden = !pl;
+  const home = !pl && !state.artist;
+  $('back').hidden = home;
   $('view-toggle').hidden = !pl || !!state.album;
   for (const b of $('view-toggle').children) b.classList.toggle('on', b.dataset.view === state.view);
-  // The filter only searches what this page lists, so say what that is
-  const scope = !pl ? 'playlists' : !state.album && state.view === 'albums' ? 'albums' : 'tracks';
+  // On the home page the box searches the whole library; elsewhere it filters what the page lists
+  const scope = home ? 'home' : pl && !state.album && state.view === 'albums' ? 'albums' : 'tracks';
   $('filter').placeholder = t(`filter.${scope}`);
   $('filter').setAttribute('aria-label', t(`filter.${scope}`));
 
-  if (!pl) {
+  if (state.artist) {
+    $('lib-title').textContent = state.artist.name;
+    list.replaceChildren(...(state.artist.songs || []).filter((s) => matches(s.title, s.album))
+      .map((s) => songRow(s, s.album)));
+  } else if (!pl && filterText()) {
+    $('lib-title').textContent = t('library.search');
+    list.replaceChildren(...searchRows());
+    window.lucide?.createIcons();
+  } else if (!pl) {
     $('lib-title').textContent = t('library.playlists');
-    list.replaceChildren(...state.playlists
-      .filter((p) => p.itemCount > 0 && matches(p.title))
-      .map((p) => row({ title: p.title, trail: t('count.tracks', { n: p.itemCount }), onClick: () => openPlaylist(p) })));
+    list.replaceChildren(...state.playlists.filter((p) => p.itemCount > 0 && matches(p.title)).map(playlistRow));
   } else if (state.album) {
     $('lib-title').textContent = state.album.title;
     list.replaceChildren(...state.album.tracks.filter((t) => matches(t.title, t.artist))
@@ -621,9 +639,15 @@ async function loadPlaylists() {
   }
 }
 
-function openPlaylist(p) {
-  Object.assign(state, { playlist: p, tracks: [], album: null });
+// Leaving the home page keeps its search, so Back returns to the same results
+function leaveHome() {
+  if (!state.playlist && !state.artist) state.homeQuery = $('filter').value;
   $('filter').value = '';
+}
+
+function openPlaylist(p) {
+  leaveHome();
+  Object.assign(state, { playlist: p, tracks: [], album: null });
   render();
   loadMore();
 }
@@ -635,9 +659,124 @@ function openAlbum(a) {
 }
 
 function back() {
-  if (state.album) state.album = null;
-  else state.playlist = null;
-  $('filter').value = '';
+  if (state.album) {
+    state.album = null;
+    if (state.fromSearch) Object.assign(state, { playlist: null, fromSearch: false });
+  } else if (state.artist) {
+    state.artist = null;
+  } else {
+    state.playlist = null;
+  }
+  $('filter').value = !state.playlist && !state.artist ? state.homeQuery : '';
+  render();
+}
+
+// ---------- Search (home page) ----------
+
+let searchTimer = 0;
+let searchSeq = 0;
+
+// Typing on the home page searches the whole library through server.py; a reply that
+// arrives after a newer request is dropped.
+function scheduleSearch() {
+  clearTimeout(searchTimer);
+  const q = $('filter').value.trim();
+  if (!q) return;
+  searchTimer = setTimeout(async () => {
+    const seq = ++searchSeq;
+    try {
+      const r = await fetch('/search?' + new URLSearchParams({ q }));
+      if (!r.ok) throw new Error(r.status);
+      const results = await r.json();
+      if (seq !== searchSeq) return;
+      state.results = { q, ...results };
+      render();
+    } catch {
+      setStatus(t('error.search'));
+    }
+  }, 200);
+}
+
+function section(titleId, rows) {
+  return rows.length ? [el('li', 'section', t(titleId)), ...rows] : [];
+}
+
+// Artists, albums, songs, then playlists whose name matches. Until the first reply
+// arrives only the playlists show; after that the latest results stay until replaced.
+function searchRows() {
+  const res = state.results;
+  const playlists = state.playlists.filter((p) => p.itemCount > 0 && matches(p.title)).map(playlistRow);
+  const rows = [];
+  if (res) {
+    rows.push(...section('search.artists', res.artists.map((a) => row({
+      title: a.name, sub: t('count.tracks', { n: a.songs }), onClick: () => openArtist(a.name),
+    }))));
+    rows.push(...section('search.albums', res.albums.map((r) => {
+      const a = groupAlbums(r.tracks)[0];
+      return row({
+        title: a.title, sub: [a.artist, r.playlistTitle].filter(Boolean).join(' · '),
+        trail: t('count.tracks', { n: a.tracks.length }),
+        art: `/api/artwork/${r.playlistId}/${a.firstIndex}`, onClick: () => openSearchAlbum(r.playlistId, a),
+      });
+    })));
+    const songs = section('search.songs', res.songs.map((s) => songRow(s, s.artist)));
+    if (res.songsTotal > res.songs.length) {
+      songs.push(el('li', 'note', t('search.moreSongs', { n: res.songsTotal - res.songs.length })));
+    }
+    rows.push(...songs);
+  }
+  rows.push(...section('search.playlists', playlists));
+  if (res && !rows.length) rows.push(el('li', 'note', t('search.none', { q: $('filter').value.trim() })));
+  return rows;
+}
+
+// A song plays from its first place (played most recently); the other playlists that
+// hold it fold out under the row, already in order of play count.
+function songRow(s, detail) {
+  const [first, ...others] = s.places;
+  const li = row({
+    title: s.title, sub: [detail, first.playlistTitle].filter(Boolean).join(' · '), trail: s.length,
+    onClick: () => playFrom(first),
+  });
+  if (!others.length) return li;
+  li.classList.add('has-places');
+  const more = el('button', 'more press-text', t('search.more', { n: others.length }));
+  more.insertAdjacentHTML('beforeend', '<i data-lucide="chevron-down" aria-hidden="true"></i>');
+  more.setAttribute('aria-expanded', 'false');
+  const places = el('ul', 'places');
+  places.hidden = true;
+  places.append(...others.map((p) => row({ title: p.playlistTitle, onClick: () => playFrom(p) })));
+  more.onclick = () => {
+    places.hidden = !places.hidden;
+    more.setAttribute('aria-expanded', String(!places.hidden));
+  };
+  li.append(more, places);
+  return li;
+}
+
+async function openArtist(name) {
+  leaveHome();
+  state.artist = { name, songs: null };
+  render();
+  try {
+    const r = await fetch('/search?' + new URLSearchParams({ artist: name }));
+    if (!r.ok) throw new Error(r.status);
+    const { songs } = await r.json();
+    if (state.artist?.name !== name) return; // went back meanwhile
+    state.artist.songs = songs;
+    render();
+    window.lucide?.createIcons();
+  } catch {
+    setStatus(t('error.search'));
+  }
+}
+
+// An album from the results opens like one picked inside its playlist; Back returns to the results
+function openSearchAlbum(playlistId, a) {
+  const p = state.playlists.find((x) => x.id === playlistId);
+  if (!p) return;
+  leaveHome();
+  Object.assign(state, { playlist: p, tracks: [], album: a, fromSearch: true });
   render();
 }
 
@@ -693,7 +832,10 @@ document.addEventListener('click', (e) => {
 // none of the press feedback in press.css ever shows on an iPhone or iPad.
 document.addEventListener('touchstart', () => {}, { passive: true });
 
-$('filter').addEventListener('input', render);
+$('filter').addEventListener('input', () => {
+  if (!state.playlist && !state.artist) scheduleSearch();
+  render();
+});
 $('output').addEventListener('change', (e) => pickOutput(JSON.parse(e.target.value)));
 
 const seek = $('seek');

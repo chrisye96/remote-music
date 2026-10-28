@@ -70,7 +70,7 @@ def run_encoder(args):
         time.sleep(3)
 
 
-def lyrics_key(name):
+def loose_key(name):
     """Compare names loosely: case, width (fullwidth brackets) and runs of spaces vary."""
     return " ".join(unicodedata.normalize("NFKC", name).casefold().split())
 
@@ -109,15 +109,156 @@ def lyrics_dirs():
 
 def find_lyrics(artist, title):
     """ESLyric names its files `Artist - Title.lrc` (timed) or `.txt` (plain); prefer timed."""
-    wanted = lyrics_key(f"{artist} - {title}")
+    wanted = loose_key(f"{artist} - {title}")
     found = {}
     for folder in lyrics_dirs():
         if folder.is_dir():
             for f in folder.iterdir():
-                if f.suffix.lower() in (".lrc", ".txt") and lyrics_key(f.stem) == wanted:
+                if f.suffix.lower() in (".lrc", ".txt") and loose_key(f.stem) == wanted:
                     found.setdefault(f.suffix.lower(), f)
     f = found.get(".lrc") or found.get(".txt")
     return f and {"synced": f.suffix.lower() == ".lrc", "text": f.read_text("utf-8-sig", errors="replace")}
+
+
+# ---------- Library search (beefweb only lists playlists, it cannot search) ----------
+
+LIBRARY_COLS = ["%title%", "%artist%", "%album artist%", "%album%", "%length%", "%tracknumber%",
+                "$directory_path(%path%)", "%play_count%", "%last_played%"]
+TRACK_FIELDS = ("index", "title", "artist", "albumArtist", "album", "length", "number", "folder")
+
+
+def beefweb(path):
+    with urllib.request.urlopen(BEEFWEB + "/api" + path, timeout=10) as r:
+        return json.load(r)
+
+
+class Library:
+    """Every playlist's items in memory. Reading all 44k takes about 0.5 s, so the index is
+    simply rebuilt when a playlist changes size, and at least once a minute so the play
+    statistics stay fresh."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.signature, self.built_at, self.tracks = None, 0.0, []
+
+    def current(self):
+        playlists = beefweb("/playlists")["playlists"]
+        signature = [(p["id"], p["itemCount"]) for p in playlists]
+        with self.lock:
+            if signature != self.signature or time.monotonic() - self.built_at > 60:
+                self.tracks = self.load(playlists)
+                self.signature, self.built_at = signature, time.monotonic()
+            return self.tracks
+
+    @staticmethod
+    def load(playlists):
+        cols = urllib.parse.quote(",".join(LIBRARY_COLS))
+        tracks = []
+        for order, p in enumerate(playlists):
+            if not p["itemCount"]:
+                continue
+            items = beefweb(f"/playlists/{p['id']}/items/0:{p['itemCount']}?columns={cols}")["playlistItems"]["items"]
+            for index, item in enumerate(items):
+                # foobar renders a missing field as "?"
+                title, artist, album_artist, album, length, number, folder, plays, last = (
+                    "" if c == "?" else c for c in item["columns"])
+                tracks.append({
+                    "index": index, "title": title, "artist": artist, "albumArtist": album_artist,
+                    "album": album, "length": length, "number": number, "folder": folder,
+                    "playlistId": p["id"], "playlistTitle": p["title"], "order": order,
+                    "plays": int(plays) if plays.isdigit() else 0, "lastPlayed": last,
+                    "titleKey": loose_key(title), "artistKey": loose_key(artist),
+                    "albumKey": loose_key(f"{album} {album_artist}"),
+                    "text": loose_key(" ".join((title, artist, album_artist, album))),
+                })
+        return tracks
+
+
+LIBRARY = Library()
+
+
+def rank_places(copies, active):
+    """Where to play a song from: the copy played most recently, then the others by play
+    count. foobar keeps statistics per file, so one file in two playlists ties; then the
+    playlist playing now wins, then foobar's playlist order. One entry per playlist."""
+    first = max(copies, key=lambda t: (t["lastPlayed"], t["playlistId"] == active, -t["order"]))
+    rest = sorted((t for t in copies if t is not first), reverse=True,
+                  key=lambda t: (t["plays"], t["lastPlayed"], t["playlistId"] == active, -t["order"]))
+    places = {}
+    for t in (first, *rest):
+        places.setdefault(t["playlistId"], t)
+    return list(places.values())
+
+
+def song_rows(tracks, active):
+    """One row per song (artist + title), with every playlist it can be played from."""
+    songs = {}
+    for t in tracks:
+        songs.setdefault((t["artistKey"], t["titleKey"]), []).append(t)
+    rows = []
+    for copies in songs.values():
+        places = rank_places(copies, active)
+        rows.append({
+            **{k: places[0][k] for k in TRACK_FIELDS},
+            "plays": sum(t["plays"] for t in places),
+            "places": [{"playlistId": t["playlistId"], "playlistTitle": t["playlistTitle"],
+                        "index": t["index"]} for t in places],
+        })
+    return rows
+
+
+def search_library(tracks, query, active, limit=50):
+    words = loose_key(query).split()
+    if not words:
+        return {"artists": [], "albums": [], "songs": [], "songsTotal": 0}
+    phrase = " ".join(words)
+    has = lambda key: all(w in key for w in words)
+    hits = [t for t in tracks if has(t["text"])]
+
+    artists = {}
+    for t in hits:
+        if has(t["artistKey"]):
+            artists.setdefault(t["artistKey"], []).append(t)
+    artist_rows = sorted(({
+        "name": max({t["artist"] for t in g}, key=[t["artist"] for t in g].count),  # most common spelling
+        "songs": len({t["titleKey"] for t in g}),
+        "starts": g[0]["artistKey"].startswith(phrase),
+    } for g in artists.values()), key=lambda a: (not a.pop("starts"), -a["songs"]))
+
+    # An album is a folder plus album tag (as on the page); it opens from its best playlist
+    albums = {}
+    for t in hits:
+        if has(t["albumKey"]):
+            albums.setdefault((t["folder"], t["albumKey"]), []).append(t)
+    album_rows = []
+    for g in albums.values():
+        per_playlist = {}
+        for t in g:
+            per_playlist.setdefault(t["playlistId"], []).append(t)
+        best = rank_places([{**ts[0], "lastPlayed": max(t["lastPlayed"] for t in ts),
+                             "plays": sum(t["plays"] for t in ts)} for ts in per_playlist.values()], active)[0]
+        album_tracks = sorted(per_playlist[best["playlistId"]], key=lambda t: t["index"])
+        album_rows.append({
+            "playlistId": best["playlistId"], "playlistTitle": best["playlistTitle"],
+            "tracks": [{k: t[k] for k in TRACK_FIELDS} for t in album_tracks],
+            "_sort": (not g[0]["albumKey"].startswith(phrase), -sum(t["plays"] for t in g)),
+        })
+    album_rows.sort(key=lambda a: a.pop("_sort"))
+
+    # Songs whose title matches come first, then by artist, then album; popular ones first
+    def tier(s):
+        title, artist = loose_key(s["title"]), loose_key(s["artist"])
+        return 0 if title.startswith(phrase) else 1 if has(title) else 2 if has(artist) else 3
+    songs = sorted(song_rows(hits, active), key=lambda s: (tier(s), -s["plays"], s["title"]))
+    return {"artists": artist_rows[:8], "albums": album_rows[:8], "songs": songs[:limit],
+            "songsTotal": len(songs)}
+
+
+def artist_songs(tracks, name, active):
+    key = loose_key(name)
+    songs = song_rows([t for t in tracks if t["artistKey"] == key], active)
+    number = lambda s: int(s["number"]) if s["number"].isdigit() else 0
+    return {"songs": sorted(songs, key=lambda s: (s["album"], number(s), s["title"]))}
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -148,14 +289,32 @@ class Handler(SimpleHTTPRequestHandler):
             return self.proxy()
         if self.path.startswith("/lyrics?"):
             return self.lyrics()
+        if self.path.startswith("/search?"):
+            return self.search()
         super().do_GET()
 
+    def query(self, name):
+        return urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get(name, [""])[0]
+
     def lyrics(self):
-        q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
-        found = find_lyrics(q.get("artist", [""])[0], q.get("title", [""])[0])
+        found = find_lyrics(self.query("artist"), self.query("title"))
         if not found:
             return self.send_error(404, "no lyrics for this track")
-        data = json.dumps(found, ensure_ascii=False).encode()
+        self.send_json(found)
+
+    # /search?q=… searches everything; /search?artist=… lists one artist's songs
+    def search(self):
+        try:
+            tracks = LIBRARY.current()
+            active = beefweb("/player")["player"]["activeItem"]["playlistId"]
+        except (OSError, ValueError, KeyError):
+            return self.send_error(502, "foobar2000 / beefweb is not reachable")
+        artist = self.query("artist")
+        self.send_json(artist_songs(tracks, artist, active) if artist
+                       else search_library(tracks, self.query("q"), active))
+
+    def send_json(self, value):
+        data = json.dumps(value, ensure_ascii=False).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
