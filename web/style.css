@@ -11,6 +11,7 @@
   /* Secondary (graphite): "what is sounding" (format badge, playing row, the sound
      line's waveform), never a control. Matches the record label in the icon. */
   --accent-2: #57534e;      /* 7.0:1 on --bg */
+  --warn: #b3261e;          /* something needs fixing (diagnostics) */
   --material: rgb(245 245 247 / 0.82);
   --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
   /* web-kit press-feedback tokens */
@@ -30,6 +31,7 @@
     --accent-strong: #f9b0d2;
     --accent-text: #2b0516;
     --accent-2: #b5afa6;      /* 7.8:1 on --bg */
+    --warn: #ff8a80;
     --material: rgb(18 18 20 / 0.8);
     color-scheme: dark;
   }
@@ -274,7 +276,7 @@ svg { width: 24px; height: 24px; }
 
 /* Bottom row, as in Spotify: where the sound is on the left, lyrics on the right.
    Extra space above: right under the play button it read as part of the transport row. */
-.bottom-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 6px; }
+.bottom-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-top: 6px; }
 /* A soft pill, like the AirPlay route button: the fill says "this is tappable" */
 .pill {
   display: flex;
@@ -298,7 +300,9 @@ svg { width: 24px; height: 24px; }
   .pill:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 9%, transparent); }
 }
 .pill svg { flex-shrink: 0; width: 16px; height: 16px; }
-#lyrics-toggle { flex-shrink: 0; width: 40px; height: 40px; }
+/* Top-aligned row (the pill's panel grows downwards); the negative margin centres the
+   40px icon on the 30px pill */
+#lyrics-toggle { flex-shrink: 0; width: 40px; height: 40px; margin-top: -5px; }
 
 /* Where the sound is: a status line, not a control. Playing from this device moves the
    sound here by itself; opening the line is the advanced path back to the computer. */
@@ -312,6 +316,23 @@ svg { width: 24px; height: 24px; }
 .output.here .ic-here { display: block; color: var(--accent-2); }
 .output.here #sound-label { color: var(--text); }
 .output[open] { flex: 1; }
+/* Diagnostics under the device picker: one line per part, icon, name, then the detail */
+.diag {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.diag li { display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 8px; }
+.diag svg { width: 16px; height: 16px; margin-top: 1px; }
+.diag .ok svg { color: var(--accent-2); }
+.diag .warn svg, .diag .warn .diag-label { color: var(--warn); }
+.diag-label { color: var(--text); font-weight: 600; }
+.diag-detail { grid-column: 2; overflow-wrap: anywhere; }
 .output select {
   width: 100%;
   margin-top: 6px;
@@ -463,4 +484,5 @@ button.row:active { background: var(--line); transition-duration: 70ms; }
   background: #b3261e;
   color: #fff;
   font-size: 13px;
+  cursor: pointer; /* opens the diagnostics */
 }

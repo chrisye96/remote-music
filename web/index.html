@@ -59,6 +59,7 @@
             <i class="chev" data-lucide="chevron-down" aria-hidden="true"></i>
           </summary>
           <select id="output" data-i18n-label="sound.picker" aria-label="foobar 输出设备" hidden></select>
+          <ul id="diag" class="diag" data-i18n-label="diag.region" aria-label="连接状态"></ul>
         </details>
         <button id="lyrics-toggle" class="icon mode press-text" data-action="lyrics" data-i18n-label="lyrics.button" aria-label="歌词" aria-pressed="false" disabled><i data-lucide="mic-vocal"></i></button>
       </div>
@@ -87,6 +88,6 @@
       <i class="ic-play" data-lucide="play"></i><i class="ic-pause" data-lucide="pause"></i>
     </button>
   </div>
-  <div id="status" class="status" role="status" hidden></div>
+  <div id="status" class="status" role="status" data-action="diagnose" hidden></div>
 </body>
 </html>

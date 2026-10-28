@@ -16,6 +16,7 @@ foobar2000 keeps doing the decoding, so anything it can play still works: SACD I
 - **Lossless stream**, 16 bit / 48 kHz FLAC (AAC 320k as a fallback), about 3 seconds behind the PC.
 - **Scrolling lyrics** from foobar2000's ESLyric `.lrc` files, synced to what you actually hear (the stream delay is taken off), with bilingual files shown as line pairs. Untimed `.txt` lyrics are shown as plain text.
 - **Shuffle and repeat** (off, all, one), mapped onto foobar2000's playback order.
+- **Diagnostics in the app**: open the sound pill to see whether foobar2000 answers, the capture is producing sound, the lyrics folder was found, and how far this device is behind. Tapping the red error banner opens it too.
 - **Lock screen controls** with the real track position and length, play / pause, skip and scrubbing.
 - **Search the whole library** from the home page: artists, albums and songs across all playlists. A song in several playlists shows once and plays from the copy you played last; the other playlists fold out under it.
 - **Playlists and albums**: filter, page through large playlists, an album view grouped by folder (works for compilations and untagged rips), artwork.
@@ -119,6 +120,8 @@ The app follows the browser language (English or Simplified Chinese). Add `?lang
 
 ## Troubleshooting
 
+Start with the sound pill at the bottom left of Now Playing: opened, it lists what works and what does not.
+
 | Symptom | Cause and fix |
 |---|---|
 | High pitched sound, stutters, about half silence | The cable's sample rate does not match on both ends and the driver. Set both to 44100 Hz (Setup step 1) |
@@ -137,7 +140,7 @@ The app follows the browser language (English or Simplified Chinese). Add `?lang
 
 ## Roadmap
 
-- Diagnostics in the app (is foobar2000 reachable, is the encoder running) and a release zip, so nobody needs git. See [docs/setup-plan.md](docs/setup-plan.md).
+- A release zip, so nobody needs git to download it. See [docs/setup-plan.md](docs/setup-plan.md).
 
 ## License
 

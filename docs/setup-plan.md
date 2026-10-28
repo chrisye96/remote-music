@@ -1,6 +1,6 @@
 # Easier setup and download: plan
 
-Decided 2026-10-28. Item 1 (`setup.ps1`) implemented 2026-10-28; items 2 to 4 are still open. Builds on [autostart-plan.md](autostart-plan.md); the two are meant to ship together.
+Decided 2026-10-28. Items 1 (`setup.ps1`) and 2 (diagnostics) implemented 2026-10-28; items 3 and 4 are still open. Builds on [autostart-plan.md](autostart-plan.md); the two are meant to ship together.
 
 ## Where it stands
 
@@ -20,7 +20,8 @@ Getting started today takes, by hand: install Python, install an ffmpeg build wi
    - Run `tailscale serve --bg --https=8090 http://127.0.0.1:8090`, after checking that port 8090 is not already served for something else. Never `tailscale serve reset`.
    - Register the logon tasks from the autostart plan only when asked (`-Autostart`; off by default), with a matching `-Uninstall`.
    - Safe to run again: every step checks first and skips what is already done.
-2. **Diagnostics in the app**: a `/status` endpoint and a small panel that shows whether beefweb is reachable, the encoder is producing segments, the capture device exists and lyrics were found. A listener on the iPad then sees why nothing plays without going back to the PC.
+2. **Diagnostics in the app** (done): a `/status` endpoint and a small panel that shows whether beefweb is reachable, the encoder is producing segments, the capture device exists and lyrics were found. A listener on the iPad then sees why nothing plays without going back to the PC.
+   As built: the list sits in the sound pill's panel, under the output picker, and refreshes every 2 s only while open. Lines: foobar2000 (version and beefweb, or not running, or running without beefweb); capture and encoding (source, age of the newest segment, encoder restarts); lyrics folder; this device (listening and how far behind, idle, stream error, or the computer itself). If `server.py` itself does not answer, the first line says so. The red error banner opens Now Playing and this panel.
 3. **Release zip**: a GitHub Release with the repository as a zip (for example `git archive`), so nobody needs git. Download, unzip, run `setup.ps1`.
 4. **Single exe (optional, last)**: PyInstaller would remove the Python install, but once winget installs Python the gain is small and every release needs a rebuild.
 

@@ -64,6 +64,9 @@ def ffmpeg_cmd(args):
     ]
 
 
+ENCODER = {"restarts": 0}  # for /status
+
+
 def run_encoder(args):
     """Keep ffmpeg alive; restart it if the device disappears or it crashes."""
     while True:
@@ -71,8 +74,29 @@ def run_encoder(args):
         HLS_DIR.mkdir(parents=True, exist_ok=True)
         subprocess.run(ffmpeg_cmd(args), cwd=HLS_DIR, stdin=subprocess.DEVNULL, stderr=sys.stderr,
                        creationflags=NO_WINDOW)
+        ENCODER["restarts"] += 1
         print("encoder: exited, restarting in 3s", file=sys.stderr)
         time.sleep(3)
+
+
+def server_status(args):
+    """What the diagnostics panel shows: is foobar2000 reachable, is the encoder producing
+    segments, where are the lyrics. Each part fails on its own."""
+    segments = [f.stat().st_mtime for f in HLS_DIR.glob("*.m4s")]
+    age = round(time.time() - max(segments), 1) if segments else None
+    encoder = {
+        "ok": age is not None and age < 4 * SEGMENT_SECONDS + 2,
+        "segmentAge": age, "restarts": ENCODER["restarts"], "codec": args.codec,
+        "source": "test tone" if args.test_tone else args.device,
+    }
+    try:
+        info = beefweb("/player")["player"]["info"]
+        foobar = {"ok": True, "version": info["version"], "beefweb": info["pluginVersion"]}
+    except (OSError, ValueError, KeyError):
+        foobar = {"ok": False, "running": foobar_dir() is not None}
+    folders = [str(d) for d in lyrics_dirs() if d.is_dir()]
+    lyrics = {"ok": bool(folders), "folder": folders[0] if folders else None}
+    return {"foobar": foobar, "encoder": encoder, "lyrics": lyrics}
 
 
 def loose_key(name):
@@ -297,6 +321,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.lyrics()
         if self.path.startswith("/search?"):
             return self.search()
+        if self.path.split("?")[0] == "/status":
+            return self.send_json(server_status(self.args))
         super().do_GET()
 
     def query(self, name):
@@ -398,6 +424,7 @@ def main():
     p.add_argument("--lyrics-dir", type=Path,
                    help="ESLyric's lyrics folder (default: found from the running foobar2000)")
     args = p.parse_args()
+    Handler.args = args  # /status reports the source and codec
     global LYRICS_DIR, HLS_DIR
     LYRICS_DIR = args.lyrics_dir
     # One folder per port: the encoder empties it on start, which must not hit another server's stream

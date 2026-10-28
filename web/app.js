@@ -448,6 +448,67 @@ function renderSound() {
   $('output-row').classList.toggle('here', here);
 }
 
+// ---------- Diagnostics (inside the sound pill's panel) ----------
+
+let diagTimer = 0;
+
+// Each line: [state, label, detail], state 'ok', 'warn' or 'info' (neither good nor bad)
+async function refreshDiag() {
+  let s = null;
+  try {
+    const r = await fetch('/status');
+    if (r.ok) s = await r.json();
+  } catch {
+    // server.py itself is down: say so below
+  }
+  const lines = [];
+  if (!s) {
+    lines.push(['warn', t('diag.server'), t('diag.serverDown')]);
+  } else {
+    const { foobar, encoder, lyrics } = s;
+    lines.push(foobar.ok
+      ? ['ok', 'foobar2000', t('diag.foobarOk', { version: foobar.version, beefweb: foobar.beefweb })]
+      : ['warn', 'foobar2000', t(foobar.running ? 'diag.noBeefweb' : 'diag.foobarDown')]);
+    lines.push(encoder.ok
+      ? ['ok', t('diag.encoder'), t('diag.encoderOk', { source: encoder.source, age: encoder.segmentAge })]
+      : ['warn', t('diag.encoder'), t('diag.encoderDown', { source: encoder.source, n: encoder.restarts })]);
+    lines.push(lyrics.ok ? ['ok', t('diag.lyrics'), lyrics.folder] : ['info', t('diag.lyrics'), t('diag.lyricsNone')]);
+  }
+  lines.push(deviceDiag());
+  const icons = { ok: 'circle-check', warn: 'triangle-alert', info: 'info' };
+  $('diag').replaceChildren(...lines.map(([kind, label, detail]) => {
+    const li = el('li', kind);
+    li.innerHTML = `<i data-lucide="${icons[kind]}" aria-hidden="true"></i>`;
+    li.append(el('span', 'diag-label', label), el('span', 'diag-detail', detail));
+    return li;
+  }));
+  window.lucide?.createIcons();
+}
+
+// The listening side only this page knows: is the stream playing, and how far behind
+function deviceDiag() {
+  const label = t('diag.device');
+  if (onHostMachine) return ['info', label, t('diag.deviceHost')];
+  if (!state.listening) return ['info', label, t('diag.deviceIdle')];
+  if (audio.error) return ['warn', label, t('diag.deviceError')];
+  return ['ok', label, t('diag.deviceListening', { delay: streamDelay().toFixed(1) })];
+}
+
+// Check only while the panel is open
+function watchDiag(open) {
+  clearInterval(diagTimer);
+  if (!open) return;
+  refreshDiag();
+  diagTimer = setInterval(refreshDiag, 2000);
+}
+
+// The red banner leads here: open Now Playing (a sheet on phones) and the panel
+function diagnose() {
+  document.body.classList.add('now-open');
+  $('output-row').open = true;
+  $('output-row').scrollIntoView({ block: 'nearest' });
+}
+
 // ---------- foobar output device ----------
 
 function outputDevices() {
@@ -856,6 +917,7 @@ const actions = {
   repeat: cycleRepeat,
   lyrics: toggleLyrics,
   back,
+  diagnose,
   'open-now': () => document.body.classList.add('now-open'),
   'close-now': () => document.body.classList.remove('now-open'),
 };
@@ -881,6 +943,7 @@ $('filter').addEventListener('input', () => {
   render();
 });
 $('output').addEventListener('change', (e) => pickOutput(JSON.parse(e.target.value)));
+$('output-row').addEventListener('toggle', () => watchDiag($('output-row').open));
 
 const seek = $('seek');
 seek.addEventListener('pointerdown', () => { state.seeking = true; });
