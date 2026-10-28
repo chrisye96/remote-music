@@ -11,6 +11,7 @@ import io
 import os
 import json
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -190,6 +191,16 @@ class Handler(SimpleHTTPRequestHandler):
         pass  # HLS polling would flood the console
 
 
+class ExclusiveServer(ThreadingHTTPServer):
+    """On Windows, SO_REUSEADDR (http.server's default) lets a second server bind the same
+    port and silently share its requests. Claim the port exclusively, so that fails."""
+    allow_reuse_address = False
+
+    def server_bind(self):
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def tailnet_url(port):
     """https URL that `tailscale serve --https=<port>` publishes, or None if Tailscale is down."""
     try:
@@ -210,16 +221,25 @@ def main():
     p.add_argument("--lyrics-dir", type=Path,
                    help="ESLyric's lyrics folder (default: found from the running foobar2000)")
     args = p.parse_args()
-    global LYRICS_DIR
+    global LYRICS_DIR, HLS_DIR
     LYRICS_DIR = args.lyrics_dir
+    # One folder per port: the encoder empties it on start, which must not hit another server's stream
+    HLS_DIR = HLS_DIR.with_name(f"{HLS_DIR.name}-{args.port}")
 
+    # Loopback only: other devices come in through `tailscale serve --https=8090`,
+    # which gives Safari the HTTPS it insists on and keeps this off the open LAN.
+    # Bind before starting the encoder, so a second copy stops here instead of
+    # restarting the capture under the running one.
+    try:
+        server = ExclusiveServer(("127.0.0.1", args.port), Handler)
+    except OSError:
+        sys.exit(f"Port {args.port} is already in use: is server.py already running? "
+                 "Stop it first, or pick another port with --port.")
     threading.Thread(target=run_encoder, args=(args,), daemon=True).start()
     print(f"remote-music running (codec={args.codec}). Open on your iPad / phone:")
     print(f"    {tailnet_url(args.port) or 'Tailscale is not running; start it to connect other devices.'}")
     print("Leave this window open; press Ctrl+C to stop.")
-    # Loopback only: other devices come in through `tailscale serve --https=8090`,
-    # which gives Safari the HTTPS it insists on and keeps this off the open LAN.
-    ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+    server.serve_forever()
 
 
 if __name__ == "__main__":

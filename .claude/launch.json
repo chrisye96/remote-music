@@ -4,14 +4,8 @@
     {
       "name": "remote-music",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["server.py"],
-      "port": 8090
-    },
-    {
-      "name": "remote-music-test-tone",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["server.py", "--test-tone"],
-      "port": 8090
+      "runtimeArgs": ["server.py", "--port", "8091", "--test-tone"],
+      "port": 8091
     }
   ]
 }
